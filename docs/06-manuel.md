@@ -187,6 +187,40 @@ sautée après une écriture. La réponse est `--ecrire`, puis committer.
 la façon de voir ce qui changerait sans toucher au vault. Ce n'est pas un
 livrable, c'est une pièce à conviction.
 
+### La carte de lecture (facultative)
+
+Un cinquième artefact existe, mais **seulement si le manifeste le déclare** :
+`genere.carte`. Il répond à une question que les quatre autres ne couvrent pas,
+« qu'y a-t-il dans ce brain, en peu de jetons ? ».
+
+- **L0** (`fichier`) — une page de moins de `lignes_max` lignes (100 par défaut) :
+  un dossier par ligne, ses sous-dossiers promus dessous, le nombre de pages par
+  rôle, et le lien vers son L1. Si elle dépasserait le plafond, elle renonce aux
+  sous-dossiers et le dit.
+- **L1** (`dossier`) — un fichier par dossier, tous rôles réunis, une page par
+  ligne avec son chemin et **une** description. Au-delà de `seuil_jetons` (8 000
+  par défaut), le dossier est coupé par sous-dossier et chaque fichier est
+  rempli jusqu'au seuil : « Dossier - 1 sur 3 ».
+- **La description est extraite, jamais écrite.** `descriptions` dit, par rôle,
+  où la lire ; rien n'est stocké dans la page.
+
+```yaml
+genere:
+  carte:
+    fichier: "AI/index/carte.md"
+    dossier: "AI/index/carte"
+    seuil_jetons: 8000            # le coût se compte à 3,5 caractères par jeton
+    descriptions:
+      unite:  { champ: resume }                                   # un champ du frontmatter
+      notion: { section: "Aperçu", forme: premiere_puce }         # une section du corps
+      vue:    { ligne: "On tranche sur" }                         # la ligne qui commence ainsi
+```
+
+Un rôle sans règle retombe sur le champ `resume_court` ; sans rien à lire, la
+ligne reste sans description. Un fichier L1 qui n'a plus de source est rapporté
+en écart et **jamais supprimé** par le générateur : `--check` reste rouge jusqu'à
+ce qu'un humain le retire. `brainkit generer --quoi carte` la régénère seule.
+
 ---
 
 ## 7. Valider
