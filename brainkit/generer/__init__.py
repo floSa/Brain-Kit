@@ -18,8 +18,8 @@ Le mode par defaut est `check` : il ne pose pas un octet. Ecrire se demande, et
 """
 
 from .corpus import Corpus, charge_corpus
-from .orchestre import ARTEFACTS, genere_tout, imprime
+from .orchestre import ARTEFACTS, FACULTATIFS, genere_tout, imprime, par_defaut
 from .sortie import CHECK, ECRIRE, SORTIE, Sortie
 
 __all__ = ["Corpus", "charge_corpus", "genere_tout", "imprime", "ARTEFACTS",
-           "Sortie", "CHECK", "SORTIE", "ECRIRE"]
+           "FACULTATIFS", "par_defaut", "Sortie", "CHECK", "SORTIE", "ECRIRE"]

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import bandeau, hubs, index, liens
+from . import bandeau, carte, hubs, index, liens
 from .corpus import Corpus, charge_corpus
 from .prose import Prose
 from .sortie import CHECK, ECRIRE, ECRIT, IDENTIQUE, Sortie
@@ -32,6 +32,17 @@ from ..valider.manifeste import Modele
 
 # Les quatre, dans l ordre. Ferme par le kit : un artefact est du code.
 ARTEFACTS = ("index", "hubs", "liens", "bandeau")
+
+# Les artefacts FACULTATIFS : ils ne tournent par defaut que si le manifeste les
+# declare, et un manifeste qui ne les declare pas n a ni refus ni ecart a leur
+# sujet. C est ce qui laisse intacts les manifestes ecrits avant eux. Demandes
+# explicitement (`--quoi carte`) sans declaration, ils REFUSENT comme les autres.
+FACULTATIFS = ("carte",)
+
+
+def par_defaut(mo: Modele) -> tuple[str, ...]:
+    """Les artefacts d une execution sans `--quoi` : les quatre, plus les declares."""
+    return ARTEFACTS + tuple(a for a in FACULTATIFS if a == "carte" and carte.declaree(mo))
 
 # Plafond de passes du point fixe. Cf. `genere_tout`.
 PASSES_MAX = 4
@@ -44,7 +55,7 @@ def _une_passe(mo: Modele, racine: Path, mode: str, dossier: Path | None,
         return s
     c = corpus if corpus is not None else charge_corpus(mo, racine)
     p = Prose(mo)
-    for a in ARTEFACTS:
+    for a in ARTEFACTS + FACULTATIFS:
         if a not in quoi:
             continue
         if a == "index":
@@ -55,13 +66,18 @@ def _une_passe(mo: Modele, racine: Path, mode: str, dossier: Path | None,
             liens.genere(c, p, s)
         elif a == "bandeau":
             bandeau.genere(c, s, s.trous)
+        elif a == "carte":
+            if carte.declaree(mo):
+                carte.genere(c, p, s)
+            else:
+                s.refuse("`genere.carte` n'est pas déclaré — rien à générer")
     s.corpus = c
     return s
 
 
 def genere_tout(mo: Modele, racine: Path, mode: str = CHECK,
                 dossier: Path | None = None,
-                quoi: tuple[str, ...] = ARTEFACTS,
+                quoi: tuple[str, ...] | None = None,
                 corpus: Corpus | None = None) -> Sortie:
     """Une passe en `check` et en `sortie`, un POINT FIXE en `ecrire`.
 
@@ -87,6 +103,8 @@ def genere_tout(mo: Modele, racine: Path, mode: str = CHECK,
     dont le catalogue ne compte pas encore un hub a creer est en ecart, et le
     dire est exactement le travail de `--check`.
     """
+    if quoi is None:
+        quoi = par_defaut(mo)
     s = _une_passe(mo, racine, mode, dossier, quoi, corpus)
     if mode != ECRIRE or not s.poses:
         return s

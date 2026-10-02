@@ -33,7 +33,7 @@ RACINE_KIT = Path(__file__).resolve().parents[2]
 if str(RACINE_KIT) not in sys.path:
     sys.path.insert(0, str(RACINE_KIT))
 
-from brainkit.generer import ARTEFACTS, genere_tout, imprime      # noqa: E402
+from brainkit.generer import ARTEFACTS, FACULTATIFS, genere_tout, imprime, par_defaut      # noqa: E402
 from brainkit.generer.sortie import CHECK, ECRIRE, SORTIE         # noqa: E402
 from brainkit import defauts                                      # noqa: E402
 from brainkit.valider import charge                               # noqa: E402
@@ -56,8 +56,10 @@ def main() -> int:
                     help="écrire dans le vault lui-même (à demander explicitement)")
     ap.add_argument("--check", action="store_true",
                     help="mode par défaut : n'écrit rien, sort en 2 s'il reste un écart")
-    ap.add_argument("--quoi", default=",".join(ARTEFACTS),
-                    help="les artefacts à régénérer : " + ", ".join(ARTEFACTS))
+    ap.add_argument("--quoi", default=None,
+                    help="les artefacts à régénérer : " + ", ".join(ARTEFACTS)
+                    + ". Facultatif (si le manifeste le déclare, il tourne par "
+                    "défaut) : " + ", ".join(FACULTATIFS))
     ap.add_argument("--detail", type=int, default=12,
                     help="nombre d'écarts et de trous détaillés dans le rapport")
     ns = ap.parse_args()
@@ -82,15 +84,19 @@ def main() -> int:
         print()
     ns.manifeste, ns.vault = manifeste, vault
 
-    quoi = tuple(x.strip() for x in ns.quoi.split(",") if x.strip())
-    inconnus = [x for x in quoi if x not in ARTEFACTS]
+    mo = charge(ns.manifeste)
+    if ns.quoi is None:
+        quoi = par_defaut(mo)
+    else:
+        quoi = tuple(x.strip() for x in ns.quoi.split(",") if x.strip())
+    connus = ARTEFACTS + FACULTATIFS
+    inconnus = [x for x in quoi if x not in connus]
     if inconnus:
         print(f"artefact(s) inconnu(s) : {', '.join(inconnus)} — "
-              f"connus : {', '.join(ARTEFACTS)}")
+              f"connus : {', '.join(connus)}")
         return 1
 
     mode = ECRIRE if ns.ecrire else (SORTIE if ns.sortie is not None else CHECK)
-    mo = charge(ns.manifeste)
     racine = ns.vault.resolve()
     s = genere_tout(mo, racine, mode=mode, dossier=ns.sortie, quoi=quoi)
     return imprime(s, mo, racine, detail=ns.detail)
