@@ -72,6 +72,23 @@ DEFAUTS: dict[str, str | list[str]] = {
     "index.sans_valeur": "(sans {axe_rangement})",
     "index.vide": "—",
     # --- la carte des liens -------------------------------------------------
+    # --- la carte de lecture (artefact facultatif) ---------------------------
+    "carte.titre": "Carte — {brain}",
+    "carte.entete": ["Généré par `{signature}`. Ne pas éditer à la main.",
+                     "{pages} pages décrites dans {dossiers} dossiers. À lire "
+                     "d'abord : le fichier du dossier voulu détaille chaque page."],
+    "carte.lien": "détail",
+    "carte.compact": "Les sous-dossiers ne sont pas détaillés ici : la carte "
+                     "dépasserait {max} lignes.",
+    "carte.niveau_dossier": "Au niveau du dossier",
+    "carte.suite": "{titre} (suite)",
+    "carte.nom_tranche": "{dossier} - {i} sur {n}",
+    "carte.l1_titre": "{dossier} — carte",
+    "carte.l1_titre_tranche": "{dossier} — carte ({i} sur {n})",
+    "carte.l1_entete": ["Généré par `{signature}`. Ne pas éditer à la main.",
+                        "{pages} pages, chacune avec son chemin et une ligne."],
+    "carte.couvre": "Couvre : {liste}.",
+
     "liens.titre": "Carte des liens — {brain}",
     "liens.entete": ["Généré par `{signature}`. Ne pas éditer à la main.",
                      "{pages} pages actives."],
