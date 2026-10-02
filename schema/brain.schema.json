@@ -1078,6 +1078,41 @@
             "masque_du_graphe": { "type": "boolean" },
             "signature": { "type": "string", "minLength": 1 }
           }
+        },
+        "carte": {
+          "description": "La carte de lecture, FACULTATIVE : un L0 court (`fichier`) et un L1 par dossier (`dossier`), chaque page decrite par UNE ligne extraite. Absente, l artefact n existe pas pour ce brain : ni refus, ni ecart.",
+          "type": "object",
+          "unevaluatedProperties": false,
+          "allOf": [{ "$ref": "#/$defs/annotations" }],
+          "required": ["fichier", "dossier"],
+          "properties": {
+            "fichier": { "type": "string", "minLength": 1 },
+            "dossier": { "type": "string", "minLength": 1 },
+            "signature": { "type": "string", "minLength": 1 },
+            "seuil_jetons": { "type": "integer", "minimum": 500 },
+            "caracteres_par_jeton": { "type": "number", "exclusiveMinimum": 0 },
+            "description_max": { "type": "integer", "minimum": 20 },
+            "lignes_max": { "type": "integer", "minimum": 10 },
+            "exclure_roles": { "type": "array", "items": { "type": "string" } },
+            "descriptions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "unevaluatedProperties": false,
+                "properties": {
+                  "champ": { "type": "string", "minLength": 1 },
+                  "section": { "type": "string", "minLength": 1 },
+                  "forme": { "enum": ["premiere_puce", "premier_paragraphe"] },
+                  "ligne": { "type": "string", "minLength": 1 }
+                },
+                "oneOf": [
+                  { "required": ["champ"] },
+                  { "required": ["section"] },
+                  { "required": ["ligne"] }
+                ]
+              }
+            }
+          }
         }
       }
     },
