@@ -217,9 +217,14 @@ genere:
 ```
 
 Un rôle sans règle retombe sur le champ `resume_court` ; sans rien à lire, la
-ligne reste sans description. Un fichier L1 qui n'a plus de source est rapporté
-en écart et **jamais supprimé** par le générateur : `--check` reste rouge jusqu'à
-ce qu'un humain le retire. `brainkit generer --quoi carte` la régénère seule.
+ligne reste sans description. Un fichier L1 qui n'a plus de source (dossier
+disparu, fichier coupé en « 1 sur 2 » et « 2 sur 2 », ou l'inverse) est rapporté
+en écart par `--check`, qui sort en 2 sans rien supprimer. `--ecrire` le supprime,
+à trois conditions : il est directement dans `dossier`, il porte la marque
+« Généré par » en tête, et le bloc ne dit pas `supprime_orphelins: false`. Un
+fichier sans la marque n'est jamais touché : il reste rapporté, `--check` reste
+rouge jusqu'à ce qu'un humain l'examine. `brainkit generer --quoi carte` la
+régénère seule.
 
 ---
 
