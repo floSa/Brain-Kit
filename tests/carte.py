@@ -6,7 +6,7 @@
 
     uv run tests/carte.py
 
-Sept scenarios, sur le vault abstrait `tests/genere-vert/` recopie hors du depot
+Huit scenarios, sur le vault abstrait `tests/genere-vert/` recopie hors du depot
 (rien n est jamais ecrit dans `tests/`) :
 
   1. FACULTATIF  — un manifeste qui ne declare pas `genere.carte` n a ni artefact,
@@ -24,8 +24,14 @@ Sept scenarios, sur le vault abstrait `tests/genere-vert/` recopie hors du depot
   5. COMPACT     — avec `lignes_max` trop bas, le L0 renonce aux sous-dossiers et
                    le dit.
   6. ECART       — un L1 modifie a la main est rapporte (code 2), et lui seul.
-  7. ORPHELIN    — un L1 sans source est rapporte et JAMAIS supprime, meme par
-                   `--ecrire`.
+  7. ORPHELIN    — un L1 sans source : `--check` le rapporte (code 2) sans le
+                   supprimer ; `--ecrire` le supprime, a trois conditions : il est
+                   dans le dossier genere, il porte la marque « Genere par », et
+                   `supprime_orphelins` n est pas a false. Hors de ces conditions,
+                   jamais.
+  8. SCISSION    — le cas qui a motive la regle : un fichier se coupe en
+                   « i sur n » (ou l inverse), l ancien est supprime, `--check`
+                   revient au vert sans `git rm` a la main.
 """
 
 from __future__ import annotations
@@ -45,7 +51,8 @@ if str(RACINE_KIT) not in sys.path:
 
 from brainkit.generer import ARTEFACTS, charge_corpus, genere_tout, par_defaut    # noqa: E402
 from brainkit.generer import carte                                                # noqa: E402
-from brainkit.generer.sortie import CHECK, ECRIRE                                 # noqa: E402
+from brainkit.generer.sortie import CHECK, ECRIRE, SORTIE                                # noqa: E402
+from brainkit.generer.orchestre import imprime                                    # noqa: E402
 from brainkit.valider.manifeste import Modele                                     # noqa: E402
 
 MANIFESTE = RACINE_KIT / "tests" / "generation.brain.yml"
@@ -82,6 +89,13 @@ def manifeste(**surcharge) -> Modele:
 
 def sans_carte() -> Modele:
     return Modele(yaml.safe_load(MANIFESTE.read_text(encoding="utf-8")), MANIFESTE)
+
+
+def imprime_code(s, mo: Modele, racine: Path) -> int:
+    """Le code de sortie du CLI, rapport muet."""
+    import contextlib, io
+    with contextlib.redirect_stdout(io.StringIO()):
+        return imprime(s, mo, racine)
 
 
 def copie() -> Path:
@@ -232,19 +246,73 @@ def scenario_ecart(j: Journal, racine: Path) -> None:
     j.verifie("`--ecrire` le répare", not genere_tout(mo, racine, mode=CHECK, quoi=("carte",)).ecarts())
 
 
+def marque(racine: Path) -> str:
+    """Un vrai fichier L1 du vault, dont le contenu porte la marque « Généré par »."""
+    return (racine / BLOC["dossier"] / "Domaine B.md").read_text(encoding="utf-8")
+
+
 def scenario_orphelin(j: Journal, racine: Path) -> None:
-    print("\n7. ORPHELIN — un L1 sans source n'est jamais supprimé")
+    print("\n7. ORPHELIN — un L1 sans source, signalé par `--check`, supprimé par `--ecrire`")
     mo = manifeste()
-    orphelin = racine / BLOC["dossier"] / "Dossier disparu.md"
-    orphelin.write_text("# vieux\n", encoding="utf-8")
+    dossier = racine / BLOC["dossier"]
+    orphelin = dossier / "Dossier disparu.md"
+    orphelin.write_text(marque(racine), encoding="utf-8")      # porte la marque
+    manuel = dossier / "Note à la main.md"
+    manuel.write_text("# écrit par un humain\n", encoding="utf-8")   # ne la porte pas
+    dehors = racine / "AI" / "index" / "Autre.md"
+    dehors.write_text(marque(racine), encoding="utf-8")        # marque, mais hors du dossier
+
     s = genere_tout(mo, racine, mode=CHECK, quoi=("carte",))
-    j.verifie("l'orphelin est rapporté comme écart",
+    j.verifie("`--check` rapporte l'orphelin marqué comme écart",
               any(p.chemin.endswith("Dossier disparu.md") and "sans source" in p.extrait
                   for p in s.ecarts()))
-    genere_tout(mo, racine, mode=ECRIRE, quoi=("carte",))
-    j.verifie("`--ecrire` ne le supprime pas", orphelin.exists())
-    j.verifie("et `--check` reste rouge tant qu'il traîne",
-              bool(genere_tout(mo, racine, mode=CHECK, quoi=("carte",)).ecarts()))
+    j.verifie("`--check` sort en 2", imprime_code(s, mo, racine) == 2)
+    j.verifie("`--check` ne supprime rien", orphelin.exists() and manuel.exists())
+
+    s = genere_tout(mo, racine, mode=SORTIE, dossier=racine.parent / "sortie", quoi=("carte",))
+    j.verifie("`--sortie` ne supprime rien dans le vault", orphelin.exists())
+
+    s = genere_tout(mo, racine, mode=ECRIRE, quoi=("carte",))
+    j.verifie("`--ecrire` supprime l'orphelin marqué", not orphelin.exists())
+    j.verifie("`--ecrire` le dit (état « supprimé »)",
+              any(p.chemin.endswith("Dossier disparu.md") and p.etat == "supprimé"
+                  for p in s.poses), f"{[(p.chemin, p.etat) for p in s.poses]}")
+    j.verifie("`--ecrire` ne touche pas un fichier sans la marque", manuel.exists())
+    j.verifie("`--ecrire` ne touche pas un fichier hors du dossier généré", dehors.exists())
+    j.verifie("le fichier sans marque reste rapporté, donc `--check` reste rouge",
+              {p.chemin for p in genere_tout(mo, racine, mode=CHECK, quoi=("carte",)).ecarts()}
+              == {f"{BLOC['dossier']}/Note à la main.md"})
+    manuel.unlink()
+    j.verifie("sans orphelin, `--check` se tait",
+              not genere_tout(mo, racine, mode=CHECK, quoi=("carte",)).ecarts())
+
+    ferme = manifeste(supprime_orphelins=False)
+    orphelin.write_text(marque(racine), encoding="utf-8")
+    genere_tout(ferme, racine, mode=ECRIRE, quoi=("carte",))
+    j.verifie("`supprime_orphelins: false` rend l'ancien comportement (rien n'est supprimé)",
+              orphelin.exists())
+    orphelin.unlink()
+    dehors.unlink()
+
+
+def scenario_scission(j: Journal) -> None:
+    print("\n8. SCISSION — un fichier coupé en « i sur n » laisse l'ancien orphelin, puis le seuil remonte")
+    racine = copie()
+    seuil = carte.MARGE_ENTETE + 70
+    genere_tout(manifeste(), racine, mode=ECRIRE, quoi=("carte",))
+    avant = {f.name for f in (racine / BLOC["dossier"]).glob("*.md")}
+    genere_tout(manifeste(seuil_jetons=seuil), racine, mode=ECRIRE, quoi=("carte",))
+    coupe = {f.name for f in (racine / BLOC["dossier"]).glob("*.md")}
+    j.verifie("la scission supprime l'ancien fichier entier",
+              any(n in avant and n not in coupe for n in avant), f"{sorted(avant)} -> {sorted(coupe)}")
+    j.verifie("`--check` est vert après la scission",
+              not genere_tout(manifeste(seuil_jetons=seuil), racine, mode=CHECK, quoi=("carte",)).ecarts())
+    genere_tout(manifeste(), racine, mode=ECRIRE, quoi=("carte",))
+    apres = {f.name for f in (racine / BLOC["dossier"]).glob("*.md")}
+    j.verifie("la fusion supprime les « i sur n » devenus orphelins", apres == avant,
+              f"{sorted(apres)} contre {sorted(avant)}")
+    j.verifie("`--check` est vert après la fusion",
+              not genere_tout(manifeste(), racine, mode=CHECK, quoi=("carte",)).ecarts())
 
 
 def main() -> int:
@@ -261,6 +329,7 @@ def main() -> int:
     scenario_compact(j)
     scenario_ecart(j, racine)
     scenario_orphelin(j, racine)
+    scenario_scission(j)
     print()
     if j.echecs:
         print(f"{len(j.echecs)} vérification(s) en échec :")
