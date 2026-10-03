@@ -31,11 +31,28 @@ se stocke pas. Un rôle sans règle retombe sur le champ `resume_court` du
 manifeste ; sans rien à lire, la ligne n'a pas de description, et ne l'invente
 pas : « une fiche vide honnêtement vaut mieux qu'une fiche remplie au jugé ».
 
-# Pas de suppression
+# Les orphelins : supprimés en écriture, à trois conditions
 
-Un fichier L1 qui n'a plus de source (dossier supprimé, tranche en moins) est
-rapporté comme ÉCART et n'est jamais supprimé par le générateur : une
-suppression se demande à un humain. `--check` reste donc rouge tant qu'il traîne.
+Un fichier L1 qui n'a plus de source (dossier supprimé, fichier coupé en
+« 1 sur 2 » et « 2 sur 2 », ou l'inverse) est toujours rapporté comme ÉCART par
+`--check`, qui sort en 2 et ne supprime rien. `--ecrire` le supprime, et
+seulement s'il remplit les trois conditions :
+
+  1. il est dans `genere.carte.dossier` — le dossier que cet artefact possède et
+     que personne d'autre n'écrit — et directement dedans, pas dans un sous-dossier ;
+  2. il porte la marque « Généré par `<signature>` » en tête : un fichier qu'un
+     humain a posé là n'est pas le sien, il reste rapporté et `--check` reste
+     rouge jusqu'à ce qu'on l'examine ;
+  3. le manifeste ne dit pas `genere.carte.supprime_orphelins: false`.
+
+Pourquoi c'est la valeur par défaut. Avant, la suppression « se demandait à un
+humain » : deux lots d'un même chantier ont dû faire un `git rm` à la main, parce
+que `--ecrire` laissait un fichier que `--check` refusait ensuite. Un générateur
+qui produit l'écart et refuse de le fermer oblige à faire à la main ce qu'il sait
+faire seul. Le fichier supprimé est dérivé, entièrement reconstructible, et sous
+git ; les trois conditions bornent ce que le générateur peut retirer à ce qu'il a
+lui-même posé. L'opt-out existe pour un vault dont le dossier de carte abrite
+autre chose.
 """
 
 from __future__ import annotations
@@ -393,13 +410,44 @@ def genere(corpus: _corpus.Corpus, prose: Prose, s: Sortie) -> None:
     for chemin, texte in poses_l1:
         s.pose(chemin, texte, ARTEFACT)
 
-    # Les fichiers L1 sans source : rapportés, jamais supprimés.
-    attendus = {c for c, _ in poses_l1}
+    orphelins(prose, s, d, {c for c, _ in poses_l1} | {fichier},
+              dossier_l1, signature)
+
+
+def marque_l1(prose: Prose, signature: str) -> str:
+    """La première ligne de l'en-tête d'un L1, telle que `l1()` l'écrit."""
+    return "> " + prose.lignes("carte.l1_entete", signature=signature, pages=0)[0]
+
+
+def porte_la_marque(chemin: Path, marque: str) -> bool:
+    """La marque est dans l'en-tête (quelques lignes), pas n'importe où dans le corps."""
+    try:
+        with chemin.open(encoding="utf-8") as f:
+            return any(ligne.rstrip("\r\n") == marque for _, ligne in zip(range(8), f))
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def orphelins(prose: Prose, s: Sortie, d: dict,
+              attendus: set[str], dossier_l1: str, signature: str) -> None:
+    """Les fichiers du dossier L1 que la carte ne produit plus : supprimés ou rapportés."""
     dir_l1 = s.racine / dossier_l1
-    if dir_l1.is_dir():
-        for p in sorted(dir_l1.glob("*.md")):
-            rel = p.relative_to(s.racine).as_posix()
-            if rel not in attendus:
-                s.poses.append(Pose(rel, ECART, ARTEFACT, "", 1,
-                                    "fichier L1 sans source : à supprimer par un humain "
-                                    "(le générateur ne supprime jamais)"))
+    if not dir_l1.is_dir():
+        return
+    suppression = d.get("supprime_orphelins", True) is not False
+    marque = marque_l1(prose, signature)
+    for p in sorted(dir_l1.glob("*.md")):
+        rel = p.relative_to(s.racine).as_posix()
+        if rel in attendus:
+            continue
+        if suppression and porte_la_marque(p, marque):
+            s.supprime(rel, ARTEFACT,
+                       "fichier L1 sans source : sera supprimé par `--ecrire`")
+        elif suppression:
+            s.poses.append(Pose(rel, ECART, ARTEFACT, "", 1,
+                                "fichier sans source ET sans la marque « Généré par » : "
+                                "pas à lui, à examiner par un humain"))
+        else:
+            s.poses.append(Pose(rel, ECART, ARTEFACT, "", 1,
+                                "fichier L1 sans source : `supprime_orphelins` est à false, "
+                                "à supprimer à la main"))

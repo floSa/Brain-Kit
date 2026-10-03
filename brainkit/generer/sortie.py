@@ -19,6 +19,9 @@ sortie posee A L INTERIEUR du vault.
 | `sortie`  | un arbre de travail SEPARE   | l ecart, et un arbre `diff`-able         |
 | `ecrire`  | le vault lui-meme            | ce qui a change, rien si rien ne change  |
 
+`ecrire` est aussi le seul mode qui SUPPRIME (`Sortie.supprime`), et seulement
+un fichier derive orphelin que l artefact a juge supprimable.
+
 `check` est le defaut. Un generateur dont le defaut ecrit est un generateur qui
 ecrira un jour ou personne ne l attendait — et le critere d acceptation de ce
 lot est justement de regenerer 765 pages sans en toucher une.
@@ -68,6 +71,10 @@ IDENTIQUE = "identique"
 ECART = "écart"
 ABSENT = "absent"
 ECRIT = "écrit"
+# Un fichier DERIVE qui n a plus de source, et que `ecrire` a retire. Seul etat de
+# suppression du kit, et il vit ici pour la meme raison que l ecriture : une
+# seule fonction touche au disque, et on la trouve en une commande.
+SUPPRIME = "supprimé"
 
 
 @dataclass
@@ -86,7 +93,7 @@ class Pose:
 
     @property
     def concorde(self) -> bool:
-        return self.etat in (IDENTIQUE, ECRIT)
+        return self.etat in (IDENTIQUE, ECRIT, SUPPRIME)
 
 
 @dataclass
@@ -194,6 +201,27 @@ class Sortie:
                 etat = ECRIT
 
         p = Pose(rel, etat, artefact, forme, lignes, extrait)
+        self.poses.append(p)
+        return p
+
+    def supprime(self, rel: str, artefact: str, ecart: str) -> Pose:
+        """Retire un fichier derive devenu orphelin — en mode `ecrire` seulement.
+
+        L APPELANT a deja verifie ce qui fait qu un fichier est supprimable (son
+        dossier, sa marque, l option du manifeste). Ici on ne verifie que ce que
+        le plan d ecriture garantit pour tous : le chemin reste DANS le vault, et
+        c est un fichier ordinaire, pas un lien symbolique. Hors `ecrire`, ou si
+        l une de ces gardes echoue, la pose est un ECART et rien n est touche —
+        `ecart` dit pourquoi.
+        """
+        cible = (self.racine / rel)
+        sur = (self.mode == ECRIRE and cible.is_file() and not cible.is_symlink()
+               and self.racine in cible.resolve().parents)
+        if sur:
+            _long(cible).unlink()
+            p = Pose(rel, SUPPRIME, artefact, "", 1, "fichier dérivé sans source : supprimé")
+        else:
+            p = Pose(rel, ECART, artefact, "", 1, ecart)
         self.poses.append(p)
         return p
 

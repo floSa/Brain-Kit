@@ -1093,6 +1093,7 @@
             "caracteres_par_jeton": { "type": "number", "exclusiveMinimum": 0 },
             "description_max": { "type": "integer", "minimum": 20 },
             "lignes_max": { "type": "integer", "minimum": 10 },
+            "supprime_orphelins": { "type": "boolean", "description": "Vrai par defaut : `--ecrire` supprime les fichiers L1 sans source qui portent la marque « Genere par ». A false, ils sont seulement rapportes." },
             "exclure_roles": { "type": "array", "items": { "type": "string" } },
             "descriptions": {
               "type": "object",
